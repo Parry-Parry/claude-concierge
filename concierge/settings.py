@@ -128,6 +128,12 @@ class App:
     mirror_to_telegram: bool = True
     brief_runs: str = ""
     brief_url: str = ""
+    # Panes beyond Concierge and Tasks that this node actually serves (appbar.js has the
+    # catalogue: inbox, review, brief, money, browser, apps). Unlisted ones are hidden and their
+    # proxies answer 404, so a fresh install shows no links to services it does not have.
+    panes: tuple[str, ...] = ()
+    # Origins besides base_url's that may POST (another tailnet name for this machine, say).
+    extra_origins: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -272,6 +278,8 @@ def load(path: Path | None = None) -> Settings:
             mirror_to_telegram=bool(ap.get("mirror_to_telegram", True)),
             brief_runs=str(ap.get("brief_runs") or ""),
             brief_url=str(ap.get("brief_url") or ""),
+            panes=tuple(str(p) for p in ap.get("panes") or ()),
+            extra_origins=tuple(str(o).rstrip("/") for o in ap.get("extra_origins") or ()),
         ),
         source=source,
         is_example=is_example,

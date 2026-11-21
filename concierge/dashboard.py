@@ -44,7 +44,7 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from concierge import app_api, config, registry, sessions, settings as settings_mod, spawn, taskchats, ticktick, tmuxctl
+from concierge import app_api, config, registry, sessions, settings as settings_mod, spawn, taskchats, tmuxctl, todoist
 
 # Fast enough that a reap shows up on the next poll, slow enough that the
 # dashboard is not itself a load on the machine it exists to relieve. One poll
@@ -164,8 +164,25 @@ CLAUDE_JS = Path(__file__).with_name("claude.js")
 TRUST_PROMPT = "Is this a project you created or one you trust"
 # Browsers send Origin on every POST. Checking it (not just Sec-Fetch-Site) also stops DNS
 # rebinding, where another site's hostname resolves here and the request looks same-origin.
-SPAWN_ORIGINS = {"https://bos-desktop.fish-grouper.ts.net", "https://bos-desktop.fish-grouper.ts.net:18787",
-                 "http://127.0.0.1:8787", "http://localhost:8787"}
+# The allowed ones are this node's own: base_url's origin (the tailnet address the phone opens),
+# any [app] extra_origins, and the dashboard's own port on loopback.
+
+
+def origin_of(url: str) -> str:
+    """scheme://host[:port] of a URL, the form a browser sends in Origin."""
+    u = urllib.parse.urlsplit(url)
+    return f"{u.scheme}://{u.netloc}" if u.scheme and u.netloc else ""
+
+
+def allowed_origins(app=None) -> set[str]:
+    app = app or config.SETTINGS.app
+    port = config.DASHBOARD_PORT
+    out = {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
+    out |= {o for o in (origin_of(app.base_url), *map(origin_of, app.extra_origins)) if o}
+    return out
+
+
+SPAWN_ORIGINS = allowed_origins()
 MAX_BODY = 64_000
 SPAWN_LIMITS = {"title": 120, "cwd": 300, "context": 30_000, "note": 4_000, "page": 500}
 # allocate_id and upsert read the registry then rewrite it. Two taps at once, or a tap
@@ -254,9 +271,9 @@ def finish_start(job_id: str, cwd: str, *, poller=None) -> None:
         # else: slow to print its URL. It is still in the Claude app as "[id] title".
 
 
-# --- the tasks page: one chat per TickTick task -------------------------------------
+# --- the tasks page: Todoist, and one chat per task -------------------------------------
 TASKS_HTML = Path(__file__).with_name("tasks.html")
-TICKTICK_ID = re.compile(r"^[A-Za-z0-9]{1,64}$")
+TASK_ID = re.compile(r"^[A-Za-z0-9]{1,64}$")
 
 
 def task_chat_request(headers, raw: bytes, *, opener=None, last_chat=None) -> tuple[int, dict]:
@@ -265,8 +282,8 @@ def task_chat_request(headers, raw: bytes, *, opener=None, last_chat=None) -> tu
     if isinstance(body, tuple):
         return body
     task_id, list_name, note = (body.get(k) or "" for k in ("task_id", "list", "note"))
-    if not all(isinstance(v, str) for v in (task_id, list_name, note)) or not TICKTICK_ID.match(task_id):
-        return 400, {"ok": False, "error": "need a TickTick task id"}
+    if not all(isinstance(v, str) for v in (task_id, list_name, note)) or not TASK_ID.match(task_id):
+        return 400, {"ok": False, "error": "need a Todoist task id"}
     chat = (last_chat or registry.last_chat)()
     if not chat:
         return 503, {"ok": False, "error": "the concierge has no Telegram chat yet; message it once"}
@@ -280,28 +297,33 @@ def task_chat_request(headers, raw: bytes, *, opener=None, last_chat=None) -> tu
     return 200, {"ok": True, **got}
 
 
-def ticktick_get(route: str, query: dict) -> tuple[int, dict]:
+def tasks_get(route: str, query: dict, *, source=None) -> tuple[int, dict]:
+    src = source or todoist
     try:
-        if route == "/api/tt/all":
-            return 200, ticktick.all_open(fresh=bool(query.get("fresh")))
+        if route == "/api/tasks/all":
+            return 200, src.all_open(fresh=bool(query.get("fresh")))
         task_id = (query.get("id") or [""])[0]
-        if not TICKTICK_ID.match(task_id):
+        if not TASK_ID.match(task_id):
             return 400, {"error": "bad task id"}
-        return 200, {"task": ticktick.one(task_id)}
-    except Exception as exc:  # noqa: BLE001 - expired login, TickTick down: say so on the page
+        return 200, {"task": src.one(task_id)}
+    except todoist.NotSetUp as exc:  # the page shows how to connect it
+        return 503, {"error": str(exc), "setup": True}
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001 - token reset, Todoist down: say so on the page
         return 502, {"error": str(exc)}
 
 
 DAY = re.compile(r"^\d{4}-\d\d-\d\d$")
 
 
-def ticktick_update(headers, raw: bytes, *, writer=None) -> tuple[int, dict]:
-    """POST /api/tt/update {id, etag, content?, priority?, day?, status?} → the task as TickTick now has it."""
+def tasks_update(headers, raw: bytes, *, writer=None) -> tuple[int, dict]:
+    """POST /api/tasks/update {id, etag, content?, priority?, day?, status?} → the task as Todoist now has it."""
     body = _read_post(headers, raw)
     if isinstance(body, tuple):
         return body
     task_id, etag = body.get("id"), body.get("etag")
-    if not (isinstance(task_id, str) and TICKTICK_ID.match(task_id) and isinstance(etag, str)):
+    if not (isinstance(task_id, str) and TASK_ID.match(task_id) and isinstance(etag, str)):
         return 400, {"ok": False, "error": "need a task id and its etag"}
     changes = {}
     if "content" in body:
@@ -323,9 +345,13 @@ def ticktick_update(headers, raw: bytes, *, writer=None) -> tuple[int, dict]:
     if not changes:
         return 400, {"ok": False, "error": "nothing to change"}
     try:
-        return 200, {"ok": True, "task": (writer or ticktick.update)(task_id, etag, changes)}
-    except ticktick.Conflict as exc:
+        return 200, {"ok": True, "task": (writer or todoist.update)(task_id, etag, changes)}
+    except todoist.Conflict as exc:
         return 409, {"ok": False, "error": str(exc), "task": exc.task}
+    except todoist.NotSetUp as exc:
+        return 503, {"ok": False, "error": str(exc), "setup": True}
+    except LookupError as exc:
+        return 404, {"ok": False, "error": str(exc)}
     except Exception as exc:  # noqa: BLE001 - expired login, rate limit: say so on the page
         return 502, {"ok": False, "error": str(exc)}
 
@@ -426,10 +452,10 @@ def handler_for(sampler: Sampler):
 
         def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
             if self.path.startswith("/brief"):
-                self._proxy_brief()
+                self._proxy_brief() if "brief" in config.SETTINGS.app.panes else self._send(404, b"no", "text/plain")
                 return
             if self._route() == "/vault" or self._route().startswith("/vault/"):
-                self._proxy_vault()
+                self._proxy_vault() if "browser" in config.SETTINGS.app.panes else self._send(404, b"no", "text/plain")
                 return
             route = self._route()
             if route in ("/app", "/app/"):
@@ -442,7 +468,7 @@ def handler_for(sampler: Sampler):
                 prefix = "" if ":" in host or host.startswith("127.") else CLAUDE_PREFIX
                 self._send(200, app_api.manifest(prefix).encode(), "application/manifest+json")
                 return
-            if route.startswith(("/api/threads", "/api/alarms/", "/api/settings", "/api/inbox/")):
+            if route.startswith(("/api/threads", "/api/alarms/", "/api/settings", "/api/inbox/", "/api/todoist")):
                 self._json(*app_api.get(route, urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)))
                 return
             if self._route() == "/claude.js":
@@ -469,10 +495,10 @@ def handler_for(sampler: Sampler):
             if self._route() == "/search.js":
                 self._send(200, TASKS_HTML.with_name("search.js").read_bytes(), "text/javascript; charset=utf-8")
                 return
-            if self._route() in ("/api/tt/all", "/api/tt/task"):
-                self._json(*ticktick_get(self._route(), urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)))
+            if self._route() in ("/api/tasks/all", "/api/tasks/task"):
+                self._json(*tasks_get(self._route(), urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)))
                 return
-            if self._route() == "/api/tt/chats":
+            if self._route() == "/api/tasks/chats":
                 self._json(200, {"chats": taskchats.chats()})
                 return
             if self._route() == "/api/jobs":
@@ -494,9 +520,9 @@ def handler_for(sampler: Sampler):
 
         def do_POST(self) -> None:  # noqa: N802
             if self.path.startswith("/brief"):
-                self._proxy_brief()
+                self._proxy_brief() if "brief" in config.SETTINGS.app.panes else self._send(404, b"no", "text/plain")
                 return
-            if self._route().startswith(("/api/threads", "/api/settings", "/api/delegations", "/api/inbox/")):
+            if self._route().startswith(("/api/threads", "/api/settings", "/api/delegations", "/api/inbox/", "/api/todoist")):
                 try:
                     length = int(self.headers.get("Content-Length") or 0)
                 except ValueError:
@@ -510,7 +536,7 @@ def handler_for(sampler: Sampler):
                     return
                 self._json(*app_api.post(self._route(), body, lock=REGISTRY_LOCK, finish=finish_start))
                 return
-            if self._route() in ("/api/task-chat", "/api/tt/update"):
+            if self._route() in ("/api/task-chat", "/api/tasks/update"):
                 try:
                     length = int(self.headers.get("Content-Length") or 0)
                 except ValueError:
@@ -518,7 +544,7 @@ def handler_for(sampler: Sampler):
                 if not 0 <= length <= MAX_BODY:
                     self._json(400, {"ok": False, "error": "bad body length"})
                     return
-                handle = task_chat_request if self._route() == "/api/task-chat" else ticktick_update
+                handle = task_chat_request if self._route() == "/api/task-chat" else tasks_update
                 self._json(*handle(self.headers, self.rfile.read(length)))
                 return
             if self._route() == "/api/spawn":

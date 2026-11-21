@@ -2,7 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 
-BIN = Path.home() / "projects/personal/claude-concierge/bin/concierge"
+BIN = Path(__file__).resolve().parents[1] / "bin" / "concierge"
 
 
 def test_entrypoint_works_from_an_unrelated_cwd(tmp_path):

@@ -111,7 +111,7 @@ def spawn_job(
     root_message_id: int | None = None,
     *,
     task_folder: str | None = None,
-    ticktick_task_id: str | None = None,
+    task_id: str | None = None,
     state_path: Path | None = None,
     tmux=tmuxctl,
     poller=None,
@@ -151,7 +151,7 @@ def spawn_job(
         tmux_window=job_id,
         brief=brief,
         claude_session_id=session_id,
-        ticktick_task_id=ticktick_task_id,
+        task_id=task_id,
         rc_url=rc_url,
         opened_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )

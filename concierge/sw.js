@@ -5,7 +5,7 @@
 // when the network is back (Background Sync, or the next time a pane opens). appbar.js lists them.
 const PAGES = "concierge-pages-v1", OUTBOX = "outbox";
 const PANES = ["/claude/", "/brief/", "/money/", "/inbox/"];  // not /claude/vault: a live screen, nothing to keep
-const QUEUED = /^\/claude\/api\/(tt\/update|threads\/[^/]+\/(answer|say))$/;
+const QUEUED = /^\/claude\/api\/(tasks\/update|threads\/[^/]+\/(answer|say))$/;
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
@@ -19,7 +19,7 @@ self.addEventListener("fetch", e => {
   if (req.method === "POST" && QUEUED.test(url.pathname)) return e.respondWith(sendOrQueue(req));
   if (req.method !== "GET" || req.headers.get("Accept")?.includes("text/event-stream") || req.headers.has("Range")) return;
   // Tasks keeps its own last copy, with offline edits applied: an older cached list would undo them on screen.
-  if (url.pathname.startsWith("/claude/api/tt/")) return;
+  if (url.pathname.startsWith("/claude/api/tasks/")) return;
   e.respondWith(read(req, e));
 });
 
@@ -58,7 +58,7 @@ self.addEventListener("message", e => { if (e.data === "flush") e.waitUntil(flus
 
 // Oldest first. Edits to one task chain: each carries the etag its page saw, so once an earlier one
 // lands, a later one based on the same copy takes the new etag instead of being refused as stale.
-// Each one ends as sent (kept a day so the pill can list it) or failed (a 4xx: TickTick changed it
+// Each one ends as sent (kept a day so the pill can list it) or failed (a 4xx: Todoist changed it
 // elsewhere, a bad request) until he clears it. A notification says how it went, if he allowed them.
 let flushing = null;
 function flush(strict) {
@@ -75,7 +75,7 @@ function flush(strict) {
         let r;
         try { r = await fetch(item.url, {method: "POST", headers: {"Content-Type": "application/json"}, body}); }
         catch (err) { if (strict) throw err; return; }  // still offline: Background Sync tries again
-        if (r.status >= 500) return;  // the server end is down (or TickTick is): keep it, try next time
+        if (r.status >= 500) return;  // the server end is down (or Todoist is): keep it, try next time
         const reply = await r.json().catch(() => ({}));
         if (r.ok && reply.task?.etag && j.etag) (etags[j.id] ??= {})[j.etag] = reply.task.etag;
         const done = {...item, done: new Date().toISOString(), ...(!r.ok && {error: reply.error || `error ${r.status}`})};

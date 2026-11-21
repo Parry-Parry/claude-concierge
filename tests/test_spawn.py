@@ -141,7 +141,7 @@ def test_a_closed_job_resumes_the_very_session_it_started(tmp_path, monkeypatch)
     """The session id is chosen at spawn, not read off the RC URL (a different id)."""
     monkeypatch.setattr(spawn.settings, "render_prompt", lambda name: Path("/p/job.md"))
     state, tmux = tmp_path / "jobs.json", FakeTmux()
-    job = spawn.spawn_job(title="t", brief="b", cwd=TASKS, chat_id="1", ticktick_task_id="tt1",
+    job = spawn.spawn_job(title="t", brief="b", cwd=TASKS, chat_id="1", task_id="tt1",
                           state_path=state, tmux=tmux, poller=lambda w: None)
     sid = registry.load(state)[job["id"]]["claude_session_id"]
     assert f"--session-id {sid}" in tmux.windows[0][2]

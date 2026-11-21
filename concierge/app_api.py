@@ -12,7 +12,7 @@ import re
 import threading
 from pathlib import Path
 
-from concierge import config, inbox_waiting, registry, spawn, threads
+from concierge import config, inbox_waiting, registry, spawn, threads, todoist
 
 APP_HTML = Path(__file__).with_name("app.html")
 ROUTE = re.compile(r"^/api/threads/(\d+)(?:/(\w+))?$")
@@ -25,9 +25,9 @@ def manifest(prefix: str = "") -> str:
     appbar.js. Served bare on :18787 it is the older install, kept working until he moves."""
     shortcuts = [{"name": "New thread", "url": f"{prefix}/app#new"}]
     if prefix:  # long-press the icon: straight to a pane
-        shortcuts += [{"name": n, "url": u} for n, u in
-                      (("Tasks", "/claude/tasks"), ("Brief", "/brief/"),
-                       ("Browser controls", "https://bos-desktop.fish-grouper.ts.net:16081/"))]
+        shortcuts.append({"name": "Tasks", "url": "/claude/tasks"})
+        if "brief" in config.SETTINGS.app.panes:
+            shortcuts.append({"name": "Brief", "url": "/brief/"})
     return json.dumps({
         "id": f"{prefix}/app", "name": "Concierge", "short_name": "Concierge", "start_url": f"{prefix}/app", "scope": "/",
         "display": "standalone", "background_color": "#0e1116", "theme_color": "#0e1116",
@@ -87,7 +87,10 @@ def get(path: str, query: dict) -> tuple[int, dict]:
             except Exception as exc:  # noqa: BLE001 - the Review page shows it, rather than an empty list
                 return 200, {"waiting": [], "error": f"{type(exc).__name__}: {exc}"}
         if path == "/api/settings/appbar":
-            return 200, json.loads(threads._kv(db, "appbar") or "{}")
+            # `panes`: the optional panes this node serves; appbar.js hides the rest.
+            return 200, json.loads(threads._kv(db, "appbar") or "{}") | {"panes": list(config.SETTINGS.app.panes)}
+        if path == "/api/todoist":  # whether it is connected; never the token itself
+            return 200, {"connected": bool(todoist.token())}
         if path == "/api/settings":
             return 200, {"rules": threads._kv(db, "rules"),
                          "delegations": [dict(d) for d in db.execute(
@@ -162,6 +165,15 @@ def post(path: str, body: dict, *, lock=None, finish=None) -> tuple[int, dict]:
                 return 400, {"ok": False, "error": "order: a list of pane ids; main: 1 to 6"}
             threads._set_kv(db, "appbar", json.dumps({"order": list(dict.fromkeys(order)), "main": main}))
             return 200, {"ok": True}
+        if path == "/api/todoist/token":
+            # Typed on his phone into Settings, straight to a file only he can read, so it never
+            # passes through a chat. Sent empty, nothing changes.
+            todoist.save_token(_text(body, "token"))
+            try:
+                todoist.call("GET", "/projects", query={"limit": 1})
+            except Exception as exc:  # noqa: BLE001 - saved, but say it doesn't work
+                return 200, {"ok": True, "connected": False, "error": str(exc)}
+            return 200, {"ok": True, "connected": True}
         if path == "/api/settings/mode/delete":
             db.execute("DELETE FROM modes WHERE id=?", (int(body["id"]),))
             return 200, {"ok": True}

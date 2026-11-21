@@ -462,6 +462,27 @@ def rc_server_cmd():
     typer.echo(rcserver.ensure_up())
 
 
+@app.command("todoist-token")
+def todoist_token_cmd() -> None:
+    """Store the Todoist API token for the Tasks pane (prompted, never echoed). Needs a terminal,
+    so only he can run it; the app's Settings page does the same from his phone."""
+    import getpass
+    import sys
+
+    from concierge import todoist
+
+    if not sys.stdin.isatty():
+        typer.echo("needs a terminal: run it yourself, or use Concierge → Settings → Todoist", err=True)
+        raise typer.Exit(1)
+    todoist.save_token(getpass.getpass("Todoist API token (Settings → Integrations → Developer): "))
+    try:
+        todoist.call("GET", "/projects", query={"limit": 1})
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"saved, but Todoist refused it: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"saved to {todoist.TOKEN_FILE} and Todoist accepted it")
+
+
 @app.command("dash")
 def dash_cmd(
     port: int = typer.Option(config.DASHBOARD_PORT, help="Port to listen on"),

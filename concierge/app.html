@@ -355,6 +355,7 @@ async function settings() {
       <p><button class="btn m_save">Save</button> ${m.id ? `<button class="btn ghost m_del">Delete</button>` : ""}</p></div>`;
   $("#main").innerHTML = `
     <h2>Bottom bar</h2><div id="barcfg"></div>
+    <h2>Todoist</h2><div id="todoist"></div>
     <h2>Global decision rules</h2><p class="muted">Every decision Claude takes follows these, plus the thread's own spec.</p>
     <textarea id="rules" class="capture" style="min-height:8em">${esc(s.rules)}</textarea><p><button class="btn" id="saverules">Save rules</button></p>
     <h2>Delegations in force</h2>${s.delegations.map(d => `<div class="sheet"><b>${d.thread ? esc(d.title || "thread " + d.thread) : "All threads"}</b>${d.kind ? ` · ${esc(d.kind)}` : ""}${d.until ? ` · until ${esc(new Date(d.until).toLocaleString())}` : ""}
@@ -364,10 +365,28 @@ async function settings() {
     <h2>Alerts per week</h2><table><tr><th>Week</th>${LV.map(l => `<th>${LVNAME[l]}</th>`).join("")}</tr>
       ${s.stats.map(w => `<tr><td>${esc(w.week)}</td>${LV.map(l => `<td>${w[l]}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="5" class="muted">No messages yet</td></tr>`}</table>`;
   barSettings();
+  todoistSettings();
   $("#saverules").onclick = async () => { await api("settings/rules", {rules: $("#rules").value}); toast("Saved"); };
   $("#main").querySelectorAll("[data-end]").forEach(b => b.onclick = async () => { await api("delegations/end", {id:+b.dataset.end}); settings(); });
   $("#addmode").onclick = () => { $("#addmode").insertAdjacentHTML("beforebegin", modeRow({allow:["critical"], start_day:4, end_day:5})); wireModes(); };
   wireModes();
+}
+// The Tasks pane reads Todoist with his API token. It goes from this box to a file on the machine that
+// only he can read (todoist.py); the page never shows it back, only whether it works.
+async function todoistSettings() {
+  const box = $("#todoist");
+  const draw = (on, err) => {
+    box.innerHTML = `<p class="muted">${on ? "Connected. The Tasks pane shows your Todoist." : "Not connected. In Todoist: Settings → Integrations → Developer, copy the API token, paste it here."}${err ? ` <span style="color:var(--red, #f66)">${esc(err)}</span>` : ""}</p>
+      <input id="tdtoken" type="password" autocomplete="off" spellcheck="false" placeholder="${on ? "Paste a new token to replace it" : "API token"}" style="width:100%">
+      <p><button class="btn" id="tdsave">${on ? "Replace token" : "Connect"}</button></p>`;
+    $("#tdsave").onclick = async () => {
+      const token = $("#tdtoken").value.trim(); if (!token) return;
+      $("#tdsave").disabled = true;
+      try { const r = await api("todoist/token", {token}); draw(r.connected, r.error); toast(r.connected ? "Connected" : "Saved, but Todoist refused it"); }
+      catch (e) { toast(e.message); $("#tdsave").disabled = false; }
+    };
+  };
+  try { draw((await api("todoist")).connected); } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
 // The phone's bottom bar: which panes sit in it, in what order. appbar.js owns the panes and saving.
 async function barSettings() {

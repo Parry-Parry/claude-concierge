@@ -164,3 +164,13 @@ spawn_mode = "same-dir"
 base_url = "https://your-machine.your-tailnet.ts.net/claude"  # in the app's scope, so alert links open the installed app
 alarm_account = "you@gmail.com"
 mirror_to_telegram = true
+
+# Origins besides base_url's own that may POST to the app (another name for this
+# machine on the tailnet, say). base_url's origin and the dashboard's loopback port
+# are always allowed; anything else gets "cross-site request refused".
+# extra_origins = ["https://other-name.your-tailnet.ts.net"]
+
+# The bottom bar always has Concierge and Tasks. These are other services that some
+# installs run on the same tailnet address; list only the ones this machine serves,
+# or their panes are links to 404s. Choices: inbox, review, brief, money, browser, apps.
+# panes = []

@@ -19,12 +19,16 @@
     {id: "browser", href: "/claude/vault/", icon: "◳", name: "Browser"},
     {id: "apps", href: "/", icon: "⌂", name: "Apps"},  // the tailnet home page: every app he has
   ];
-  const DEFAULT = {order: PANES.map(p => p.id), main: 4};
+  // Concierge and Tasks are this server's own. The rest are other services on the same tailnet address,
+  // and a node only shows the ones it has: [app] panes in concierge.toml, sent as `panes` with the layout.
+  const CORE = new Set(["concierge", "tasks"]);
+  const DEFAULT = {order: PANES.map(p => p.id), main: 4, panes: []};
   const KEY = "appbar-layout", API = "/claude/api/settings/appbar";
   // Saved order first, then any pane added since (it lands at the end, under More).
   const arrange = cfg => {
-    const byId = Object.fromEntries(PANES.map(p => [p.id, p]));
-    const order = [...new Set([...(cfg.order || []).filter(id => byId[id]), ...PANES.map(p => p.id)])];
+    const on = new Set([...CORE, ...(cfg.panes || [])]);
+    const byId = Object.fromEntries(PANES.filter(p => on.has(p.id)).map(p => [p.id, p]));
+    const order = [...new Set([...(cfg.order || []).filter(id => byId[id]), ...Object.keys(byId)])];
     return {panes: order.map(id => byId[id]), main: Math.min(Math.max(+cfg.main || DEFAULT.main, 1), 6)};
   };
   const cached = () => { try { return JSON.parse(localStorage.getItem(KEY)) || DEFAULT; } catch { return DEFAULT; } };
@@ -33,6 +37,7 @@
   window.appbar = {
     panes: PANES, layout: () => arrange(cached()),
     async save(cfg) {
+      cfg = {...cfg, panes: cached().panes || []};
       const r = await fetch(API, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(cfg)});
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
       remember(cfg); render(arrange(cfg));
@@ -108,7 +113,8 @@
   render(arrange(cached()));
   // The concierge's copy wins: one layout on every device.
   fetch(API).then(r => r.ok ? r.json() : null).then(cfg => {
-    if (!cfg || !cfg.order) return;
+    if (!cfg) return;
+    cfg = {...DEFAULT, ...cfg};
     if (JSON.stringify(cfg) !== JSON.stringify(cached())) { remember(cfg); render(arrange(cfg)); }
   }).catch(() => {});
   scrim.addEventListener("click", () => openMore(false));

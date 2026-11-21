@@ -1,8 +1,8 @@
-"""The tasks page's promise: one TickTick task, one chat, however long he is away."""
+"""The tasks page's promise: one Todoist task, one chat, however long he is away."""
 
 from pathlib import Path
 
-from concierge import registry, spawn, taskchats
+from concierge import config, registry, spawn, taskchats
 
 
 class FakeTmux:
@@ -23,8 +23,8 @@ def test_the_same_task_always_comes_back_to_its_first_chat(tmp_path, monkeypatch
     monkeypatch.setattr(spawn.settings, "render_prompt", lambda name: Path("/p/job.md"))
     monkeypatch.setattr(spawn, "resolve_cwd", lambda cwd: Path(cwd).expanduser())
     state, tmux = tmp_path / "jobs.json", FakeTmux()
-    task = {"id": "tt1", "projectId": "inbox1", "title": "Fix the projector", "content": "brown spot"}
-    fetch = lambda name, args: task
+    task = {"id": "tt1", "project_id": "inbox1", "content": "Fix the projector", "description": "brown spot"}
+    fetch = lambda task_id: task
 
     first = taskchats.open_chat("tt1", "Inbox", "", "chat", state_path=state, fetch=fetch, tmux=tmux)
     assert first["started"] and "Fix the projector" in tmux.windows[0][1]
@@ -45,10 +45,12 @@ def test_the_same_task_always_comes_back_to_its_first_chat(tmp_path, monkeypatch
     assert tmux.windows[0][1].endswith(f"--resume {sid}")
 
 
-def test_property_lists_start_in_the_property_repo(tmp_path, monkeypatch):
+def test_a_task_chat_starts_in_the_default_repo_with_the_task_in_its_brief(tmp_path, monkeypatch):
     monkeypatch.setattr(spawn.settings, "render_prompt", lambda name: Path("/p/job.md"))
     monkeypatch.setattr(spawn, "resolve_cwd", lambda cwd: Path(cwd).expanduser())
     tmux = FakeTmux()
-    taskchats.open_chat("tt2", "⚙Property Management - General", "", "chat", state_path=tmp_path / "j.json",
-                        fetch=lambda n, a: {"id": "tt2", "title": "EICR"}, tmux=tmux)
-    assert "nyakundi-property-management" in tmux.windows[0][1]
+    taskchats.open_chat("tt2", "Home", "", "chat", state_path=tmp_path / "j.json",
+                        fetch=lambda task_id: {"id": "tt2", "content": "EICR", "priority": 4}, tmux=tmux)
+    cmd = tmux.windows[0][1]
+    assert str(config.SETTINGS.default_repo.path) in cmd
+    assert "EICR" in cmd and "app.todoist.com/app/task/tt2" in cmd

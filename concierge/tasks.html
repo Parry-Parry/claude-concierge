@@ -91,23 +91,23 @@
 </head>
 <body>
 <header>
-  <div class="top"><h1>Task chats</h1><button class="icon" id="reload" aria-label="Refresh from TickTick">↻</button></div>
-  <input id="q" type="search" placeholder="Search all tasks, or paste a TickTick link" aria-label="Search all tasks, or paste a TickTick link">
+  <div class="top"><h1>Task chats</h1><button class="icon" id="reload" aria-label="Refresh from Todoist">↻</button></div>
+  <input id="q" type="search" placeholder="Search all tasks, or paste a Todoist link" aria-label="Search all tasks, or paste a Todoist link">
   <div class="tabs" role="group" aria-label="View">
     <button data-view="today" aria-pressed="true">Today</button>
     <button data-view="next" aria-pressed="false">Next</button>
     <button data-view="chats" aria-pressed="false">✦ Chats</button>
   </div>
-  <details class="help"><summary>Search like Tickfind</summary>
+  <details class="help"><summary>How search works</summary>
     Every word must match; one typo is forgiven if nothing matches exactly. <code>#tag</code> <code>~list</code> <code>-~list</code>
     <code>!high</code> <code>!med</code> <code>!low</code> <code>due:today</code> <code>due:overdue</code> <code>due:week</code> <code>due:none</code>
     <code>is:note</code> <code>-word</code> <code>"a phrase"</code> <code>a | b</code> (either) <code>sort:due</code> <code>sort:best</code></details>
 </header>
 <main id="out"><p class="msg">Loading your tasks…</p></main>
 <script>
-// One Claude Code chat per TickTick task. Today and Next mirror his TickTick filters; search mirrors Tickfind.
+// One Claude Code chat per Todoist task. Today and Next are the views in todoist.py; search is search.js.
 // First tap starts the task's chat; later taps open the same chat, resumed if the concierge closed it.
-// Server: claude-concierge dashboard (taskchats.py, ticktick.py).
+// Server: claude-concierge dashboard (taskchats.py, todoist.py).
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const store = {get: k => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -120,7 +120,7 @@ async function api(path, body, label) {  // label: what sw.js's outbox calls it 
   const headers = {"Content-Type": "application/json", ...(label && {"X-Outbox-Label": encodeURIComponent(label)})};
   const r = await fetch(path, body ? {method: "POST", headers, body: JSON.stringify(body)} : {});
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.ok === false) throw new Error(j.error || `error ${r.status}`);
+  if (!r.ok || j.ok === false) throw Object.assign(new Error(j.error || `error ${r.status}`), {setup: !!j.setup});
   return j;
 }
 
@@ -145,11 +145,11 @@ const byPriority = (a, b) => (b.priority || 0) - (a.priority || 0) || (dueDay(a)
   || (a.list || "").localeCompare(b.list || "") || stamp(a.dueDate) - stamp(b.dueDate);
 const stamp = s => s ? Date.parse(s.replace(/([+-]\d\d)(\d\d)$/, "$1:$2")) || 0 : 0;
 // Search and the Today / Next views are Tickfind's search (search.js, checked against tickfind/tests/search-cases.json);
-// the views' queries are his rules in ticktick-core (rules.toml), sent with the tasks.
+// the views' queries come from todoist.py (VIEWS), sent with the tasks.
 const search = (text, sort) => TickSearch.run(all, text, {today: today(), sort});
 
 // --- what is on screen ---
-function linkedId(text) { const m = text.match(/ticktick\.com\/\S*?tasks\/([0-9a-f]{24})/i); return m && m[1]; }
+function linkedId(text) { const m = text.match(/todoist\.com\/\S*?\btask\/(?:[\w-]*-)?([A-Za-z0-9]{6,64})\b/i); return m && m[1]; }
 function visible() {
   const q = $("#q").value.trim();
   const id = linkedId(q);
@@ -211,7 +211,7 @@ async function change(id, fields, msg) {
   const st = $(`#ed-${id}`); if (st) { st.className = "status"; st.textContent = "Saving…"; }
   try {
     const what = "day" in fields ? `Moved to ${fields.day || "no date"}` : msg;
-    const r = await api("api/tt/update", {id, etag: t.etag, ...fields}, `Tasks · ${what}: ${t.title}`);
+    const r = await api("api/tasks/update", {id, etag: t.etag, ...fields}, `Tasks · ${what}: ${t.title}`);
     if (r.queued) {  // no signal: sw.js sends it later; show it done here and in the copy offline opens use
       const day = "day" in fields ? {dueDate: fields.day && `${fields.day}T00:00:00.000+0000`, isAllDay: true, timeZone: "UTC"} : {};
       r.task = {...t, ...fields, ...day};
@@ -248,7 +248,7 @@ function render() {
     if (t.header) return `<h2 class="grp">${t.header}<span class="n">${t.n}</span></h2>`;
     const c = chats[t.id], kids = kidsOf(t.id).length, folded = !unfolded.has(t.id);
     const meta = [dueText(t), esc(t.list), t.closed ? "done or deleted" : ""].filter(Boolean).join(" · ");
-    const tt = t.projectId ? `<a class="link" href="https://ticktick.com/webapp/#p/${esc(t.projectId)}/tasks/${esc(t.id)}" target="_blank" rel="noopener">TickTick ›</a>` : "";
+    const tt = t.url ? `<a class="link" href="${esc(t.url)}" target="_blank" rel="noopener">Todoist ›</a>` : "";
     const fold = kids ? `<button class="fold" data-fold="${esc(t.id)}" aria-expanded="${!folded}"
         aria-label="${folded ? "Show" : "Hide"} ${kids} subtask${kids === 1 ? "" : "s"}">${kids} ${folded ? "▸" : "▾"}</button>` : "";
     return `<div class="t${openId === t.id ? " open" : ""}${t.sub ? " sub" + (t.sub > 1 ? " sub" + t.sub : "") : ""}"${listColor(t)}>
@@ -265,13 +265,14 @@ function apply(r, c) {
 }
 async function load(fresh) {
   try {
-    const [r, c] = await Promise.all([api("api/tt/all" + (fresh ? "?fresh=1" : "")), api("api/tt/chats")]);
+    const [r, c] = await Promise.all([api("api/tasks/all" + (fresh ? "?fresh=1" : "")), api("api/tasks/chats")]);
     if (editing || busy) return;  // never yank the page from under him; the next load catches up
     apply(r, c); render();
     store.set("tc-last", JSON.stringify({r, c}));
     if (r.error) $("#out").insertAdjacentHTML("afterbegin", `<p class="msg bad">Showing an older copy: ${esc(r.error)}</p>`);
   } catch (e) {
-    const msg = `Couldn't reach TickTick: ${esc(e.message)}`;
+    if (e.setup) { $("#out").innerHTML = `<p class="msg">${esc(e.message)}.</p><p class="msg"><a class="btn" href="/claude/app#settings">Open Settings</a></p>`; return; }
+    const msg = `Couldn't reach Todoist: ${esc(e.message)}`;
     all.length ? $("#out").insertAdjacentHTML("afterbegin", `<p class="msg bad">${msg}. Showing your last copy.</p>`)
                : $("#out").innerHTML = `<p class="msg bad">${msg}</p>`;
   }
@@ -293,7 +294,7 @@ async function start(id) {
 function waitForLink(id, tries = 0) {
   clearTimeout(polling);
   polling = setTimeout(async () => {
-    try { chats = (await api("api/tt/chats")).chats || {}; } catch {}
+    try { chats = (await api("api/tasks/chats")).chats || {}; } catch {}
     if (chats[id]?.rc_url || tries > 30) render(); else waitForLink(id, tries + 1);
   }, 2000);
 }
@@ -305,7 +306,7 @@ $("#q").oninput = () => {
     const id = linkedId($("#q").value);
     if (id && !byId[id] && (!linked || linked.id !== id)) {
       linked = "loading"; openId = id; render();
-      try { linked = (await api(`api/tt/task?id=${id}`)).task; if (linked.status) linked.closed = true; } catch { linked = null; }
+      try { linked = (await api(`api/tasks/task?id=${id}`)).task; if (linked.status) linked.closed = true; } catch { linked = null; }
     } else if (id) openId = id;
     render();
   }, 150);
