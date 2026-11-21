@@ -16,7 +16,7 @@
     {id: "money", href: "/money/", icon: "£", name: "Money"},
     // The vault browser's viewer, proxied by the concierge so it opens inside the app.
     // Its controls (restart, tabs) are on the Apps page and the icon's long-press menu.
-    {id: "browser", href: "/claude/vault/vnc.html?autoconnect=1&reconnect=1&resize=remote&path=claude/vault/websockify",
+    {id: "browser", href: "/claude/vault/vnc.html?autoconnect=1&reconnect=1&resize=scale&path=claude/vault/websockify",
      icon: "◳", name: "Browser"},
     {id: "apps", href: "/", icon: "⌂", name: "Apps"},  // the tailnet home page: every app he has
   ];
