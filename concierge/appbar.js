@@ -12,11 +12,12 @@
     {id: "inbox", href: "/inbox/", icon: "✉", name: "Inbox"},
     // Plannotator Inbox, framed so it stays in the app (it lives on :45581, owner-only).
     {id: "review", href: "/claude/review", icon: "✎", name: "Review"},
-    {id: "brief", href: "/brief/", icon: "☀", name: "Brief"},
+    {id: "brief", href: "/claude/brief/", icon: "☀", name: "Brief"},  // briefs.py, or [app] brief_upstream's pages
     {id: "money", href: "/money/", icon: "£", name: "Money"},
     // The vault browser's viewer, proxied by the concierge so it opens inside the app.
     // Its controls (restart, tabs) are on the Apps page and the icon's long-press menu.
-    {id: "browser", href: "/claude/vault/", icon: "◳", name: "Browser"},
+    {id: "browser", href: "/claude/vault/vnc.html?autoconnect=1&reconnect=1&resize=remote&path=claude/vault/websockify",
+     icon: "◳", name: "Browser"},
     {id: "apps", href: "/", icon: "⌂", name: "Apps"},  // the tailnet home page: every app he has
   ];
   // Concierge and Tasks are this server's own. The rest are other services on the same tailnet address,

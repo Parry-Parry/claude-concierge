@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Morning Brief</title>
+<meta name="theme-color" content="#14161a">
+<link rel="manifest" href="/claude/app/manifest.webmanifest">
+<script src="/claude/appbar.js" defer></script>
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --ink:#1b1d21; --mute:#6b6f76; --line:#e6e3dd; --red:#d93025; --amber:#e8710a; --blue:#1a73e8; --chip:#efede8; color-scheme:light }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --card:#1d2026; --ink:#eceae6; --mute:#9aa0a8; --line:#2c3038; --red:#ff6b5e; --amber:#ffa04d; --blue:#8ab4f8; --chip:#272b32; color-scheme:dark }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui, -apple-system, sans-serif }
+  main { max-width:680px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 16px) 16px 24px }
+  .top { display:flex; align-items:center; gap:8px }
+  h1 { font-size:22px; margin:0; flex:1 }
+  select { min-height:40px; border-radius:20px; border:1px solid var(--line); background:var(--card); color:inherit; font:inherit; font-size:15px; padding:0 12px }
+  .headline { font-size:18px; font-weight:600; margin:14px 0 4px }
+  .when { color:var(--mute); font-size:14px; margin:0 0 12px }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); margin:20px 0 6px }
+  .item { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--line); border-radius:12px; padding:10px 12px; margin:6px 0 }
+  .item.red { border-left-color:var(--red) } .item.amber { border-left-color:var(--amber) }
+  .item .d { color:var(--mute); font-size:14px; white-space:pre-wrap; margin-top:2px }
+  .item a { color:var(--blue); font-size:14px; text-decoration:none; display:inline-block; margin-top:4px; min-height:24px }
+  .msg { color:var(--mute); padding:12px 0 }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><h1>Morning Brief</h1><select id="day" aria-label="Which day" hidden></select></div>
+  <div id="out"><p class="msg">Loading…</p></div>
+</main>
+<script>
+// Server: briefs.py via /claude/api/brief. The text comes from his emails and chats: escape everything.
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+const safe = u => /^https?:\/\//i.test(u || "") ? u : "";
+const pretty = d => new Date(d + "T12:00").toLocaleDateString("en-GB", {weekday: "long", day: "numeric", month: "long"});
+async function load(date) {
+  try {
+    const r = await fetch("/claude/api/brief" + (date ? `?date=${encodeURIComponent(date)}` : ""));
+    if (!r.ok) throw new Error(`error ${r.status}`);
+    const {run, dates} = await r.json();
+    const pick = $("#day");
+    pick.hidden = dates.length < 2;
+    pick.innerHTML = dates.map(d => `<option value="${esc(d)}"${run && d === run.date ? " selected" : ""}>${esc(pretty(d))}</option>`).join("");
+    if (!run) { $("#out").innerHTML = `<p class="msg">No brief kept yet. The next one arrives after 07:00.</p>`; return; }
+    const item = i => `<div class="item ${esc(i.level)}"><div>${esc(i.text)}</div>${i.detail ? `<div class="d">${esc(i.detail)}</div>` : ""}${
+      safe(i.link) ? `<a href="${esc(safe(i.link))}" target="_blank" rel="noopener">Open ›</a>` : ""}</div>`;
+    $("#out").innerHTML = `<p class="headline">${esc(run.headline)}</p><p class="when">${esc(pretty(run.date))}</p>` +
+      (run.sections || []).map(s => `${s.title ? `<h2>${esc(s.title)}</h2>` : ""}${(s.items || []).map(item).join("") || `<p class="msg">Nothing.</p>`}`).join("");
+  } catch (e) { $("#out").innerHTML = `<p class="msg">Couldn't load the brief: ${esc(e.message)}</p>`; }
+}
+$("#day").onchange = e => load(e.target.value);
+load();
+</script>
+</body>
+</html>

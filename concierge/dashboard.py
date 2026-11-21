@@ -158,8 +158,13 @@ class Sampler:
 # Spec: docs/superpowers/specs/2026-10-30-claude-button-design.md
 
 CLAUDE_PREFIX = "/claude"
-BRIEF_UPSTREAM = "http://127.0.0.1:8804"  # inbox-brief's server.py
-VAULT_UPSTREAM = ("127.0.0.1", 16180)  # the vault browser's noVNC viewer (its :6080 republished on loopback)
+BRIEF_HTML = Path(__file__).with_name("brief.html")
+
+
+def browser_upstream(app=None) -> tuple[str, int]:
+    """The Browser pane's noVNC server, from [app] browser_upstream."""
+    host, _, port = (app or config.SETTINGS.app).browser_upstream.rpartition(":")
+    return host or "127.0.0.1", int(port)
 CLAUDE_JS = Path(__file__).with_name("claude.js")
 TRUST_PROMPT = "Is this a project you created or one you trust"
 # Browsers send Origin on every POST. Checking it (not just Sec-Fetch-Site) also stops DNS
@@ -401,7 +406,7 @@ def handler_for(sampler: Sampler):
             browser sheet with a URL bar. Passed through as-is to inbox-brief's server."""
             length = int(self.headers.get("Content-Length") or 0)
             body = self.rfile.read(length) if length else None
-            req = urllib.request.Request(BRIEF_UPSTREAM + self.path, data=body, method=self.command,
+            req = urllib.request.Request(config.SETTINGS.app.brief_upstream + self.path, data=body, method=self.command,
                                          headers={k: v for k, v in self.headers.items()
                                                   if k.lower() in ("content-type", "accept", "cache-control")})
             try:
@@ -425,12 +430,13 @@ def handler_for(sampler: Sampler):
                 self.end_headers()
                 return
             upgrade = (self.headers.get("Upgrade") or "").lower() == "websocket"
-            head = [f"{self.command} {path} HTTP/1.1", f"Host: {VAULT_UPSTREAM[0]}:{VAULT_UPSTREAM[1]}",
+            upstream = browser_upstream()
+            head = [f"{self.command} {path} HTTP/1.1", f"Host: {upstream[0]}:{upstream[1]}",
                     f"Connection: {'Upgrade' if upgrade else 'close'}"]
             head += [f"{k}: {v}" for k, v in self.headers.items() if k.lower() not in ("host", "connection")]
             length = int(self.headers.get("Content-Length") or 0)
             try:
-                up = socket.create_connection(VAULT_UPSTREAM, timeout=10)
+                up = socket.create_connection(upstream, timeout=10)
             except OSError as e:
                 self._send(502, f"vault browser unreachable: {e}".encode(), "text/plain")
                 return
@@ -451,8 +457,11 @@ def handler_for(sampler: Sampler):
             up.close()
 
         def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
-            if self.path.startswith("/brief"):
-                self._proxy_brief() if "brief" in config.SETTINGS.app.panes else self._send(404, b"no", "text/plain")
+            if self.path.startswith("/brief") and config.SETTINGS.app.brief_upstream:
+                self._proxy_brief()
+                return
+            if self._route() in ("/brief", "/brief/") and "brief" in config.SETTINGS.app.panes:
+                self._send(200, BRIEF_HTML.read_bytes(), "text/html; charset=utf-8")
                 return
             if self._route() == "/vault" or self._route().startswith("/vault/"):
                 self._proxy_vault() if "browser" in config.SETTINGS.app.panes else self._send(404, b"no", "text/plain")
@@ -468,7 +477,7 @@ def handler_for(sampler: Sampler):
                 prefix = "" if ":" in host or host.startswith("127.") else CLAUDE_PREFIX
                 self._send(200, app_api.manifest(prefix).encode(), "application/manifest+json")
                 return
-            if route.startswith(("/api/threads", "/api/alarms/", "/api/settings", "/api/inbox/", "/api/todoist")):
+            if route.startswith(("/api/threads", "/api/alarms/", "/api/settings", "/api/inbox/", "/api/todoist", "/api/brief")):
                 self._json(*app_api.get(route, urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)))
                 return
             if self._route() == "/claude.js":
@@ -519,8 +528,8 @@ def handler_for(sampler: Sampler):
             self._send(404, b"no", "text/plain")
 
         def do_POST(self) -> None:  # noqa: N802
-            if self.path.startswith("/brief"):
-                self._proxy_brief() if "brief" in config.SETTINGS.app.panes else self._send(404, b"no", "text/plain")
+            if self.path.startswith("/brief") and config.SETTINGS.app.brief_upstream:
+                self._proxy_brief()
                 return
             if self._route().startswith(("/api/threads", "/api/settings", "/api/delegations", "/api/inbox/", "/api/todoist")):
                 try:

@@ -462,6 +462,24 @@ def rc_server_cmd():
     typer.echo(rcserver.ensure_up())
 
 
+@app.command("brief-save")
+def brief_save_cmd(
+    file: str = typer.Argument("-", help="The brief as JSON (see concierge/briefs.py); - for stdin"),
+) -> None:
+    """Keep today's Morning Brief for the Brief pane. The morning-brief job runs this, then notifies."""
+    import sys
+
+    from concierge import briefs
+
+    text = sys.stdin.read() if file == "-" else Path(file).read_text()
+    try:
+        path = briefs.save(json.loads(text))
+    except ValueError as exc:  # bad JSON or a bad field: say which, so the job can fix it
+        typer.echo(f"brief not saved: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"saved {path}")
+
+
 @app.command("todoist-token")
 def todoist_token_cmd() -> None:
     """Store the Todoist API token for the Tasks pane (prompted, never echoed). Needs a terminal,

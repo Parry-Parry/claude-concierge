@@ -174,3 +174,7 @@ mirror_to_telegram = true
 # installs run on the same tailnet address; list only the ones this machine serves,
 # or their panes are links to 404s. Choices: inbox, review, brief, money, browser, apps.
 # panes = []
+#
+# Built in: "brief" (the Morning Brief the job keeps with `concierge brief-save`) and
+# "browser" (a noVNC viewer, proxied so it opens inside the app).
+# browser_upstream = "127.0.0.1:6080"   # websockify serving noVNC

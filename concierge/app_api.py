@@ -12,7 +12,7 @@ import re
 import threading
 from pathlib import Path
 
-from concierge import config, inbox_waiting, registry, spawn, threads, todoist
+from concierge import briefs, config, inbox_waiting, registry, spawn, threads, todoist
 
 APP_HTML = Path(__file__).with_name("app.html")
 ROUTE = re.compile(r"^/api/threads/(\d+)(?:/(\w+))?$")
@@ -27,7 +27,7 @@ def manifest(prefix: str = "") -> str:
     if prefix:  # long-press the icon: straight to a pane
         shortcuts.append({"name": "Tasks", "url": "/claude/tasks"})
         if "brief" in config.SETTINGS.app.panes:
-            shortcuts.append({"name": "Brief", "url": "/brief/"})
+            shortcuts.append({"name": "Brief", "url": "/claude/brief/"})
     return json.dumps({
         "id": f"{prefix}/app", "name": "Concierge", "short_name": "Concierge", "start_url": f"{prefix}/app", "scope": "/",
         "display": "standalone", "background_color": "#0e1116", "theme_color": "#0e1116",
@@ -40,20 +40,8 @@ def manifest(prefix: str = "") -> str:
 
 
 def brief() -> dict | None:
-    """The latest Morning Brief run: its headline and how many items need him."""
-    app = config.SETTINGS.app
-    if not app.brief_runs:
-        return None
-    runs = sorted(Path(app.brief_runs).expanduser().glob("*.json"))
-    if not runs:
-        return None
-    try:
-        run = json.loads(runs[-1].read_text())
-    except (OSError, ValueError):
-        return None
-    items = run.get("items") or []
-    return {"headline": (run.get("meta") or {}).get("headline", ""), "date": run.get("date"),
-            "red": sum(1 for i in items if i.get("level") == "red"), "items": len(items), "url": app.brief_url}
+    """The latest Morning Brief for the home card, if the Brief pane is on."""
+    return briefs.card() if "brief" in config.SETTINGS.app.panes else None
 
 
 def _bg(fn, *args, **kw) -> None:
@@ -89,6 +77,9 @@ def get(path: str, query: dict) -> tuple[int, dict]:
         if path == "/api/settings/appbar":
             # `panes`: the optional panes this node serves; appbar.js hides the rest.
             return 200, json.loads(threads._kv(db, "appbar") or "{}") | {"panes": list(config.SETTINGS.app.panes)}
+        if path == "/api/brief":
+            day = (query.get("date") or [None])[0]
+            return 200, {"run": briefs.get(day), "dates": briefs.dates()[:60]}
         if path == "/api/todoist":  # whether it is connected; never the token itself
             return 200, {"connected": bool(todoist.token())}
         if path == "/api/settings":

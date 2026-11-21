@@ -134,6 +134,10 @@ class App:
     panes: tuple[str, ...] = ()
     # Origins besides base_url's that may POST (another tailnet name for this machine, say).
     extra_origins: tuple[str, ...] = ()
+    # The Browser pane's noVNC viewer, host:port on loopback (websockify serving noVNC's web files).
+    browser_upstream: str = "127.0.0.1:16180"
+    # Another server's Brief pages to show at /brief instead of the built-in one (briefs.py).
+    brief_upstream: str = ""
 
 
 @dataclass(frozen=True)
@@ -280,6 +284,8 @@ def load(path: Path | None = None) -> Settings:
             brief_url=str(ap.get("brief_url") or ""),
             panes=tuple(str(p) for p in ap.get("panes") or ()),
             extra_origins=tuple(str(o).rstrip("/") for o in ap.get("extra_origins") or ()),
+            browser_upstream=str(ap.get("browser_upstream") or "127.0.0.1:16180"),
+            brief_upstream=str(ap.get("brief_upstream") or "").rstrip("/"),
         ),
         source=source,
         is_example=is_example,
