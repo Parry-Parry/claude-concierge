@@ -1,7 +1,7 @@
 """Threads: one specific thing per thread, the conversation about it, and its alerts.
 
 Everything the app shows lives in one SQLite file. Jobs write through the CLI
-(`post`, `ask`, `facts`, `close`, `decided`); Kelvin writes through the app's API.
+(`post`, `ask`, `facts`, `close`, `decided`); the owner writes through the app's API.
 Spec: https://claude.ai/artifact/5rUz9w4esiwr1D6eddcmLT
 
 Two rules the rest of this file exists to keep:
@@ -310,7 +310,7 @@ def say(db, thread_id: int, text: str, *, author: str = "me", about: int | None 
     shown = f"Re: “{d['text'][:60]}…”\n{text}" if about is not None else text
     mid = post(db, thread, shown, author=author)
     db.execute("UPDATE messages SET state='sent' WHERE id=?", (mid,))
-    problem = _deliver(thread["pane"], _to_job(thread, f"Kelvin says:{ref} {text}"), submitter=submitter)
+    problem = _deliver(thread["pane"], _to_job(thread, f"{config.owner()} says:{ref} {text}"), submitter=submitter)
     db.execute("UPDATE messages SET state=?, error=? WHERE id=?",
                ("failed" if problem else "picked", problem, mid))
     return mid
@@ -336,7 +336,7 @@ def answer(db, msg_id: int, choice: str, *, note: str = "", submitter=None) -> s
         if choice == "Close":
             close(db, thread["id"])
         return None
-    body = f'Decision on "{msg["text"]}": Kelvin chose "{choice}".' + (f" {note}" if note else "")
+    body = f'Decision on "{msg["text"]}": {config.owner()} chose "{choice}".' + (f" {note}" if note else "")
     return _deliver(thread["pane"], _to_job(thread, body), submitter=submitter)
 
 
@@ -385,7 +385,7 @@ def decided(db, thread: sqlite3.Row, question: str, choice: str, *, rule: str, k
     """Claude deciding for him. Refused unless a live delegation covers this thread."""
     d = delegation_for(db, thread["id"], kind)
     if not d:
-        raise PermissionError("no delegation covers this thread: ask Kelvin with `ask` instead")
+        raise PermissionError(f"no delegation covers this thread: ask {config.owner()} with `ask` instead")
     if not rule.strip():
         raise ValueError("say which rule of the spec you relied on (--rule)")
     mid = post(db, thread, question, author="claude", urgency="fyi", options=[choice], sender=sender)
@@ -400,7 +400,7 @@ def undo(db, msg_id: int, *, submitter=None) -> str | None:
         raise ValueError("only an un-undone decision Claude took can be undone")
     db.execute("UPDATE messages SET undone=1 WHERE id=?", (msg_id,))
     thread = db.execute("SELECT * FROM threads WHERE id=?", (msg["thread"],)).fetchone()
-    body = (f'Kelvin reversed your decision "{msg["answer"]}" on "{msg["text"]}". '
+    body = (f'{config.owner()} reversed your decision "{msg["answer"]}" on "{msg["text"]}". '
             "Undo what you can, then ask him with `ask`.")
     return _deliver(thread["pane"], _to_job(thread, body), submitter=submitter)
 
@@ -420,7 +420,7 @@ def rules_text(db, thread_id: int | None = None) -> str:
     live = [d for d in db.execute("SELECT * FROM delegations WHERE ended IS NULL ORDER BY id")
             if (not d["until"] or d["until"] > _iso(now()))
             and (thread_id is None or d["thread"] in (None, thread_id))]
-    out.append("\nDelegations you may act under:" if live else "\nNo delegation: every decision goes to Kelvin.")
+    out.append("\nDelegations you may act under:" if live else f"\nNo delegation: every decision goes to {config.owner()}.")
     for d in live:
         scope = f"thread {d['thread']}" if d["thread"] else "all threads"
         out.append(f"- [{scope}{', kind ' + d['kind'] if d['kind'] else ''}"

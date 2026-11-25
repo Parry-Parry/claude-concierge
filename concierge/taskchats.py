@@ -57,7 +57,7 @@ def brief(task: dict, list_name: str, note: str) -> str:
             "priority": f"p{5 - (task.get('priority') or 1)}", "labels": task.get("labels")}
     body = {k: v for k, v in body.items() if v}
     return (
-        "Started from his Todoist tasks page by Kelvin. This chat is the home of one Todoist task: "
+        f"Started from his Todoist tasks page by {config.owner()}. This chat is the home of one Todoist task: "
         "each time he taps it on the page he comes back here, so keep the task's state in the chat and the task.\n\n"
         f"Task: {task.get('content')} (project: {list_name})\n{url}\n\n"
         f"His note: {note or 'none. Read the task, then tell him in a few lines where it stands and the next step.'}\n\n"

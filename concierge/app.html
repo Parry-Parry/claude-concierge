@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-owner="{{OWNER}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
@@ -124,6 +124,7 @@
   <button class="icon" id="gear" title="Settings">⚙</button></header>
 <main id="main"></main>
 <script>
+const OWNER = document.documentElement.dataset.owner || "Owner";  // [app] owner_name, filled in when served
 const $ = (s, el=document) => el.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const linkify = s => esc(s).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
@@ -315,8 +316,8 @@ function delegForm(t) {
     const v = k => $("#d_" + k).value.trim();
     if (!v("may")) return toast("Say what Claude may decide");
     const spec = [`May decide: ${v("may")}`, v("never") && `Off limits: ${v("never")}`,
-      `Money: ${v("money") ? "up to £" + v("money") + " per decision" : "none, any spend goes to Kelvin"}`,
-      v("ask") && `Ask Kelvin when: ${v("ask")}`, v("lean") && `When unsure, prefer: ${v("lean")}`].filter(Boolean).join("\n");
+      `Money: ${v("money") ? "up to £" + v("money") + " per decision" : "none, any spend goes to " + OWNER}`,
+      v("ask") && `Ask ${OWNER} when: ${v("ask")}`, v("lean") && `When unsure, prefer: ${v("lean")}`].filter(Boolean).join("\n");
     const until = v("until") ? new Date(v("until")).toISOString() : "";
     try { await api(`threads/${t.id}/delegate`, {spec, scope:v("scope"), kind:v("kind"), until}); lastSig = ""; thread(t.id); }
     catch (e) { toast(e.message); }

@@ -7,6 +7,7 @@ tmuxctl.submit waits seconds for the box to clear, and the page polls for the re
 
 from __future__ import annotations
 
+import html
 import json
 import re
 import threading
@@ -15,6 +16,11 @@ from pathlib import Path
 from concierge import briefs, config, inbox_waiting, registry, spawn, threads, todoist
 
 APP_HTML = Path(__file__).with_name("app.html")
+
+
+def app_html() -> bytes:
+    """The app page with [app] owner_name filled in, escaped for an attribute."""
+    return APP_HTML.read_text().replace("{{OWNER}}", html.escape(config.owner(), quote=True)).encode()
 ROUTE = re.compile(r"^/api/threads/(\d+)(?:/(\w+))?$")
 LIMITS = {"text": 8000, "spec": 4000, "rules": 8000, "note": 2000}
 
@@ -106,7 +112,7 @@ def _text(body: dict, key: str, required: bool = True) -> str:
 def start_thread(db, text: str, *, spawner=None, lock=None) -> dict:
     """Quick capture: a job and its thread, back as soon as the window exists."""
     title = " ".join(text.split())[:60] or "New thread"
-    brief_text = (f"Started from Kelvin's Concierge app. His message:\n<<<\n{text}\n>>>\n\n"
+    brief_text = (f"Started from {config.owner()}'s Concierge app. His message:\n<<<\n{text}\n>>>\n\n"
                   "Talk to him only through your thread: `concierge post`, `concierge ask` for decisions, "
                   "`concierge summary` for what he reads first, `concierge facts` for the key facts, `concierge close` when it's done.")
     chat = registry.last_chat() or ""

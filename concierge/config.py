@@ -6,6 +6,11 @@ from concierge import settings as settings_mod
 
 SETTINGS = settings_mod.current()
 
+
+def owner() -> str:
+    """The person this concierge works for, as [app] owner_name names them."""
+    return SETTINGS.app.owner_name
+
 REPO = settings_mod.REPO_ROOT
 
 STATE_FILE = REPO / "state" / "jobs.json"

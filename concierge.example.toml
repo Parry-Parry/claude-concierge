@@ -161,6 +161,7 @@ spawn_mode = "same-dir"
 # sends job messages to Telegram, for while the app is new.
 
 [app]
+owner_name = "Your name"  # what the app, job briefs and prompts call you
 base_url = "https://your-machine.your-tailnet.ts.net/claude"  # in the app's scope, so alert links open the installed app
 alarm_account = "you@gmail.com"
 mirror_to_telegram = true

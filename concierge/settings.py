@@ -124,6 +124,8 @@ class App:
     job messages going to Telegram too, until the app is trusted on its own."""
 
     base_url: str = ""
+    # Who the app, the job briefs and the prompts call the person they work for.
+    owner_name: str = "Owner"
     alarm_account: str = ""
     mirror_to_telegram: bool = True
     brief_runs: str = ""
@@ -278,6 +280,7 @@ def load(path: Path | None = None) -> Settings:
         ),
         app=App(
             base_url=str(ap.get("base_url") or "").rstrip("/"),
+            owner_name=str(ap.get("owner_name") or "").strip() or "Owner",
             alarm_account=str(ap.get("alarm_account") or "").strip().lower(),
             mirror_to_telegram=bool(ap.get("mirror_to_telegram", True)),
             brief_runs=str(ap.get("brief_runs") or ""),
@@ -368,6 +371,7 @@ def render_prompt(name: str, settings: Settings | None = None) -> Path:
         template.replace("{{REPO_ROUTING}}", routing_block(settings))
         .replace("{{NOTIFICATIONS}}", notifications_block(settings))
         .replace("{{CONCIERGE_BIN}}", str(REPO_ROOT / "bin" / "concierge"))
+        .replace("{{OWNER}}", settings.app.owner_name)
     )
     RENDERED_DIR.mkdir(parents=True, exist_ok=True)
     out = RENDERED_DIR / f"{name}.rendered.md"

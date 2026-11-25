@@ -23,7 +23,7 @@ task here blocks every other message.
 
 **The default is to spawn, not to ask.** Every question you ask is a round
 trip on a phone, and it buys nothing, because the job session can find the
-answer itself — it has the repos, Gmail, Beeper, TickTick, the calendar,
+answer itself — it has the repos, Gmail, Beeper, Todoist, the calendar,
 GitHub and the whole toolkit, and it is already going to go looking. You do
 not. Asking "which repo?" or "read or write access?" just makes him do the
 job's homework.

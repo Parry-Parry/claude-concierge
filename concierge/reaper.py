@@ -355,8 +355,8 @@ WRAPUP_DIR = config.REPO / "state" / "wrapup"
 
 WRAPUP_TEMPLATE = (
     "[Concierge wrap-up] This chat has been idle since it finished. Before it is "
-    "closed and archived, decide whether anything from it is still on Kelvin's side.\n"
-    "1. If something is left for him, a TickTick task must track it AND be up to "
+    "closed and archived, decide whether anything from it is still on {owner}'s side.\n"
+    "1. If something is left for him, a Todoist task must track it AND be up to "
     "date: read the task now, tick off what this chat has since done, add any next "
     "step this chat left open, fix the title and due date. Create one, linked to "
     "this chat, if none exists. A task that exists but is stale does not count.\n"
@@ -583,7 +583,7 @@ def run(
             wrapup_dir.mkdir(parents=True, exist_ok=True)
             problem = tmux.submit(
                 f"{config.TMUX_SESSION}:{window}",
-                WRAPUP_TEMPLATE.format(path=wrapup_dir / f"{job_id}.txt"),
+                WRAPUP_TEMPLATE.format(path=wrapup_dir / f"{job_id}.txt", owner=config.owner()),
             )
             if problem:
                 notable.append(f"  spare {job_id}: wrap-up not delivered ({problem})")

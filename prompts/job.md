@@ -40,7 +40,7 @@ the thread is found from `$CONCIERGE_JOB_ID`, so you never pass an id:
   if the new one overtakes it, `--replaces <id>`; when events settle one (a
   deadline passes, a firm drops out), `withdraw <id> "<what happened>"`. Open
   decisions should be independent: answering one must never make another moot.
-- **"Kelvin says: About decision N ..."** means he wants more before choosing:
+- **"{{OWNER}} says: About decision N ..."** means he wants more before choosing:
   answer in a `post`, plainly: what it relates to, what each option leads to,
   what it costs. Don't re-ask unless the options change (then `--replaces N`).
 - **Summary first.** Opening a thread he sees your summary and any open
@@ -51,7 +51,7 @@ the thread is found from `$CONCIERGE_JOB_ID`, so you never pass an id:
 - **Key facts**: the card has fixed rows, the same on every thread: Next,
   Waiting on, Due, Money, Who, Decided, Link. Short values. Anything else goes
   in the summary.
-- His messages arrive as `[thread N: title] Kelvin says: ...`.
+- His messages arrive as `[thread N: title] {{OWNER}} says: ...`.
 - **Before deciding anything yourself**, run `{{CONCIERGE_BIN}} rules`. If a
   delegation covers it, decide within its spec and record it with
   `{{CONCIERGE_BIN}} decided "<question>" "<choice>" --rule "<the rule you relied on>"`.

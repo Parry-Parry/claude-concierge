@@ -24,7 +24,7 @@ threads with `--thread`; see 13 Edward's `kelvin.sh`. `notify` still works and l
 in the job's thread; `--status done` closes it.
 
 His messages and taps are typed into the session's pane with `tmuxctl.submit`, as
-`[thread N: title] Kelvin says: ...` or `... Decision on "...": Kelvin chose "..."`.
+`[thread N: title] <owner> says: ...` or `... Decision on "...": <owner> chose "..."` (`<owner>` is `[app] owner_name`).
 The row records sent → picked up (left the box) → acted on (the job's next post),
 or failed with the reason.
 

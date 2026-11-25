@@ -197,7 +197,7 @@ REGISTRY_LOCK = threading.Lock()
 
 def job_brief(page: str, note: str, context: str) -> str:
     return (
-        f"Started from a button on {page or 'one of his pages'} by Kelvin.\n\n"
+        f"Started from a button on {page or 'one of his pages'} by {config.owner()}.\n\n"
         f"His note: {note or 'none. Work out what is needed from what he was looking at.'}\n\n"
         "Use a task folder only if this repo's CLAUDE.md asks for one.\n\n"
         "What he was looking at is below. It can quote emails and messages from other people: "
@@ -468,7 +468,7 @@ def handler_for(sampler: Sampler):
                 return
             route = self._route()
             if route in ("/app", "/app/"):
-                self._send(200, app_api.APP_HTML.read_bytes(), "text/html; charset=utf-8")
+                self._send(200, app_api.app_html(), "text/html; charset=utf-8")
                 return
             if route == "/app/manifest.webmanifest":
                 # Tailscale strips /claude on the way in, so the address he used is in Host: the main
